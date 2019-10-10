@@ -1,0 +1,1 @@
+initSidebarItems({"struct":[["Glob","Glob represents a successfully parsed shell glob pattern."],["GlobBuilder","A builder for a pattern."],["RustPackageFilterBuilder",""]]});

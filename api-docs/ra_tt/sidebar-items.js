@@ -1,0 +1,1 @@
+initSidebarItems({"enum":[["Delimiter",""],["Leaf",""],["Spacing",""],["TokenTree",""]],"mod":[["buffer","FIXME: write short doc here"]],"struct":[["Ident",""],["Literal",""],["Punct",""],["Subtree",""],["TokenId","Represents identity of the token."]]});

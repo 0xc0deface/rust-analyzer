@@ -1,0 +1,1 @@
+initSidebarItems({"fn":[["bind_pat",""],["block_from_expr",""],["expr_unimplemented",""],["expr_unit",""],["match_arm",""],["match_arm_list",""],["name_ref",""],["path_from_name_ref",""],["path_pat",""],["path_qualified",""],["placeholder_pat",""],["record_field",""],["record_pat",""],["tuple_struct_pat",""],["where_clause",""],["where_pred",""]],"mod":[["tokens",""]]});

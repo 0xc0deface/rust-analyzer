@@ -1,0 +1,1 @@
+initSidebarItems({"fn":[["main_loop",""],["server_capabilities",""],["show_message",""]],"mod":[["config","FIXME: write short doc here"],["req","FIXME: write short doc here"]],"struct":[["LspError",""]],"type":[["Result",""]]});

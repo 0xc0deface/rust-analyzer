@@ -1,0 +1,1 @@
+initSidebarItems({"macro":[["impl_arena_id",""]],"mod":[["map","A map from arena IDs to some other type. Space requirement is O(highest ID)."]],"struct":[["Arena",""],["RawId",""]],"trait":[["ArenaId",""]]});
