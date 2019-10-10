@@ -318,7 +318,7 @@
                 "id": "ralsp.string",
                 "description": "Color for strings",
                 "defaults": {
-                    "dark": "#CE9178",
+                    "dark": "#98c379",
                     "light": "#A31515",
                     "highContrast": "#CE9178"
                 }
@@ -345,7 +345,7 @@
                 "id": "ralsp.keyword.unsafe",
                 "description": "Color for unsafe",
                 "defaults": {
-                    "dark": "#FF3030",
+                    "dark": "#f75454",
                     "light": "#FF1010",
                     "highContrast": "#FF1010"
                 }
@@ -354,7 +354,7 @@
                 "id": "ralsp.function",
                 "description": "Color for functions",
                 "defaults": {
-                    "dark": "#DCDCAA",
+                    "dark": "#e4ab6a",
                     "light": "#795E26",
                     "highContrast": "#DCDCAA"
                 }
@@ -363,7 +363,7 @@
                 "id": "ralsp.parameter",
                 "description": "Color for parameters",
                 "defaults": {
-                    "dark": "#9CDCFE",
+                    "dark": "#d3d167",
                     "light": "#001080",
                     "highContrast": "#9CDCFE"
                 }
@@ -408,7 +408,7 @@
                 "id": "ralsp.macro",
                 "description": "Color for macros",
                 "defaults": {
-                    "dark": "#BFEBBF",
+                    "dark": "#C586C0",
                     "light": "#DD6718",
                     "highContrast": "#ED7718"
                 }
@@ -426,7 +426,7 @@
                 "id": "ralsp.type",
                 "description": "Color for types",
                 "defaults": {
-                    "dark": "#4EC9B0",
+                    "dark": "#79a3d3",
                     "light": "#267F99",
                     "highContrast": "#4EC9B0"
                 }
@@ -435,7 +435,7 @@
                 "id": "ralsp.field",
                 "description": "Color for fields",
                 "defaults": {
-                    "dark": "#4EC9B0",
+                    "dark": "#9CDCFE",
                     "light": "#267F99",
                     "highContrast": "#4EC9B0"
                 }
@@ -444,7 +444,7 @@
                 "id": "ralsp.variable",
                 "description": "Color for variables",
                 "defaults": {
-                    "dark": "#4EC9B0",
+                    "dark": "#e2868e",
                     "light": "#267F99",
                     "highContrast": "#4EC9B0"
                 }
@@ -453,7 +453,7 @@
                 "id": "ralsp.variable.mut",
                 "description": "Color for mutable variables",
                 "defaults": {
-                    "dark": "#4EC9B0",
+                    "dark": "#e2868e",
                     "light": "#267F99",
                     "highContrast": "#4EC9B0"
                 }
@@ -462,7 +462,7 @@
                 "id": "ralsp.module",
                 "description": "Color for modules",
                 "defaults": {
-                    "dark": "#D4D4D4",
+                    "dark": "#9bb7d6",
                     "light": "#000000",
                     "highContrast": "#FFFFFF"
                 }
