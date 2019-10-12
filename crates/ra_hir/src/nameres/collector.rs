@@ -2,11 +2,12 @@
 
 use ra_cfg::CfgOptions;
 use ra_db::FileId;
-use ra_syntax::ast;
+use ra_syntax::{ast, SmolStr};
 use rustc_hash::FxHashMap;
 use test_utils::tested_by;
 
 use crate::{
+    attr::Attr,
     db::DefDatabase,
     ids::{AstItemDef, LocationCtx, MacroCallId, MacroCallLoc, MacroDefId, MacroFileKind},
     name::MACRO_RULES,
@@ -532,7 +533,7 @@ where
         // `#[macro_use] extern crate` is hoisted to imports macros before collecting
         // any other items.
         for item in items {
-            if self.is_cfg_enabled(&item.attrs) {
+            if self.is_cfg_enabled(item.attrs()) {
                 if let raw::RawItemKind::Import(import_id) = item.kind {
                     let import = self.raw_items[import_id].clone();
                     if import.is_extern_crate && import.is_macro_use {
@@ -543,9 +544,11 @@ where
         }
 
         for item in items {
-            if self.is_cfg_enabled(&item.attrs) {
+            if self.is_cfg_enabled(item.attrs()) {
                 match item.kind {
-                    raw::RawItemKind::Module(m) => self.collect_module(&self.raw_items[m]),
+                    raw::RawItemKind::Module(m) => {
+                        self.collect_module(&self.raw_items[m], item.attrs())
+                    }
                     raw::RawItemKind::Import(import_id) => self
                         .def_collector
                         .unresolved_imports
@@ -557,10 +560,12 @@ where
         }
     }
 
-    fn collect_module(&mut self, module: &raw::ModuleData) {
+    fn collect_module(&mut self, module: &raw::ModuleData, attrs: &[Attr]) {
+        let path_attr = self.path_attr(attrs);
+        let is_macro_use = self.is_macro_use(attrs);
         match module {
             // inline module, just recurse
-            raw::ModuleData::Definition { name, items, ast_id, attr_path, is_macro_use } => {
+            raw::ModuleData::Definition { name, items, ast_id } => {
                 let module_id =
                     self.push_child_module(name.clone(), ast_id.with_file_id(self.file_id), None);
 
@@ -569,21 +574,21 @@ where
                     module_id,
                     file_id: self.file_id,
                     raw_items: self.raw_items,
-                    mod_dir: self.mod_dir.descend_into_definition(name, attr_path.as_ref()),
+                    mod_dir: self.mod_dir.descend_into_definition(name, path_attr),
                 }
                 .collect(&*items);
-                if *is_macro_use {
+                if is_macro_use {
                     self.import_all_legacy_macros(module_id);
                 }
             }
             // out of line module, resolve, parse and recurse
-            raw::ModuleData::Declaration { name, ast_id, attr_path, is_macro_use } => {
+            raw::ModuleData::Declaration { name, ast_id } => {
                 let ast_id = ast_id.with_file_id(self.file_id);
-                match self.mod_dir.resolve_submodule(
+                match self.mod_dir.resolve_declaration(
                     self.def_collector.db,
                     self.file_id,
                     name,
-                    attr_path.as_ref(),
+                    path_attr,
                 ) {
                     Ok((file_id, mod_dir)) => {
                         let module_id = self.push_child_module(name.clone(), ast_id, Some(file_id));
@@ -596,7 +601,7 @@ where
                             mod_dir,
                         }
                         .collect(raw_items.items());
-                        if *is_macro_use {
+                        if is_macro_use {
                             self.import_all_legacy_macros(module_id);
                         }
                     }
@@ -709,12 +714,16 @@ where
         }
     }
 
-    fn is_cfg_enabled(&self, attrs: &raw::Attrs) -> bool {
-        attrs.as_ref().map_or(true, |attrs| {
-            attrs
-                .iter()
-                .all(|attr| attr.is_cfg_enabled(&self.def_collector.cfg_options) != Some(false))
-        })
+    fn is_cfg_enabled(&self, attrs: &[Attr]) -> bool {
+        attrs.iter().all(|attr| attr.is_cfg_enabled(&self.def_collector.cfg_options) != Some(false))
+    }
+
+    fn path_attr<'a>(&self, attrs: &'a [Attr]) -> Option<&'a SmolStr> {
+        attrs.iter().find_map(|attr| attr.as_path())
+    }
+
+    fn is_macro_use<'a>(&self, attrs: &'a [Attr]) -> bool {
+        attrs.iter().any(|attr| attr.is_simple_atom("macro_use"))
     }
 }
 
