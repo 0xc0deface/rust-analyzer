@@ -1,4 +1,11 @@
-//! FIXME: write short doc here
+//! Config used by the language server.
+//!
+//! We currently get this config from `initialize` LSP request, which is not the
+//! best way to do it, but was the simplest thing we could implement.
+//!
+//! Of particular interest is the `feature_flags` hash map: while other fields
+//! configure the server itself, feature flags are passed into analysis, and
+//! tweak things like automatic insertion of `()` in completions.
 
 use rustc_hash::FxHashMap;
 
@@ -22,6 +29,8 @@ pub struct ServerConfig {
 
     pub lru_capacity: Option<usize>,
 
+    pub max_inlay_hint_length: Option<usize>,
+
     /// For internal usage to make integrated tests faster.
     #[serde(deserialize_with = "nullable_bool_true")]
     pub with_sysroot: bool,
@@ -37,6 +46,7 @@ impl Default for ServerConfig {
             exclude_globs: Vec::new(),
             use_client_watching: false,
             lru_capacity: None,
+            max_inlay_hint_length: None,
             with_sysroot: true,
             feature_flags: FxHashMap::default(),
         }
@@ -72,10 +82,7 @@ mod test {
         assert_eq!(default, serde_json::from_str(r#"{}"#).unwrap());
         assert_eq!(
             default,
-            serde_json::from_str(
-                r#"{"publishDecorations":null, "showWorkspaceLoaded":null, "lruCapacity":null}"#
-            )
-            .unwrap()
+            serde_json::from_str(r#"{"publishDecorations":null, "lruCapacity":null}"#).unwrap()
         );
     }
 }

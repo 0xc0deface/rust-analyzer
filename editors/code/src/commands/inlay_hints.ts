@@ -85,7 +85,11 @@ export class HintsUpdater {
         if (newHints !== null) {
             const newDecorations = newHints.map(hint => ({
                 range: hint.range,
-                renderOptions: { after: { contentText: `: ${hint.label}` } }
+                renderOptions: {
+                    after: {
+                        contentText: `: ${hint.label}`
+                    }
+                }
             }));
             return editor.setDecorations(
                 typeHintDecorationType,

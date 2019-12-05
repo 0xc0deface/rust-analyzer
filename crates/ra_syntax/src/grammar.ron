@@ -1,5 +1,5 @@
 // Stores definitions which must be used in multiple places
-// See `cargo gen-syntax` (defined in crates/ra_tools/src/main.rs)
+// See `cargo xtask codegen` (defined in xtasks/src/main.rs)
 Grammar(
     punct: [
         (";", "SEMI"),
@@ -126,6 +126,7 @@ Grammar(
         "SOURCE_FILE",
 
         "STRUCT_DEF",
+        "UNION_DEF",
         "ENUM_DEF",
         "FN_DEF",
         "RET_TYPE",
@@ -285,6 +286,16 @@ Grammar(
                 "DocCommentsOwner"
             ]
         ),
+        "UnionDef": (
+            traits: [
+                "VisibilityOwner",
+                "NameOwner",
+                "TypeParamsOwner",
+                "AttrsOwner",
+                "DocCommentsOwner"
+            ],
+            options: ["RecordFieldDefList"],
+        ),
         "RecordFieldDefList": (collections: [("fields", "RecordFieldDef")]),
         "RecordFieldDef": (
             traits: [
@@ -388,7 +399,7 @@ Grammar(
         ]),
 
         "NominalDef": (
-            enum: ["StructDef", "EnumDef"],
+            enum: ["StructDef", "EnumDef", "UnionDef"],
             traits: [
                 "NameOwner",
                 "TypeParamsOwner",
@@ -396,12 +407,13 @@ Grammar(
             ],
         ),
         "ModuleItem": (
-            enum: ["StructDef", "EnumDef", "FnDef", "TraitDef", "TypeAliasDef", "ImplBlock",
+            enum: ["StructDef", "UnionDef", "EnumDef", "FnDef", "TraitDef", "TypeAliasDef", "ImplBlock",
                    "UseItem", "ExternCrateItem", "ConstDef", "StaticDef", "Module" ],
-            traits: ["AttrsOwner"]
+            traits: ["AttrsOwner"],
         ),
         "ImplItem": (
-            enum: ["FnDef", "TypeAliasDef", "ConstDef"]
+            enum: ["FnDef", "TypeAliasDef", "ConstDef"],
+            traits: ["AttrsOwner"]
         ),
 
         "TupleExpr": (
@@ -586,7 +598,10 @@ Grammar(
                 ("lifetime_params", "LifetimeParam" ),
             ]
         ),
-        "TypeParam": ( traits: ["NameOwner", "AttrsOwner", "TypeBoundsOwner", "DefaultTypeParamOwner"] ),
+        "TypeParam": (
+            options: [("default_type", "TypeRef")],
+            traits: ["NameOwner", "AttrsOwner", "TypeBoundsOwner"],
+        ),
         "LifetimeParam": (
             traits: ["AttrsOwner"],
         ),
@@ -638,6 +653,7 @@ Grammar(
             ],
             traits: [
                 "AttrsOwner",
+                "ModuleItemOwner",
             ]
         ),
         "ParamList": (
@@ -649,14 +665,14 @@ Grammar(
         "SelfParam": (
             traits: [
                 "TypeAscriptionOwner",
-				"AttrsOwner",
+                "AttrsOwner",
             ]
         ),
         "Param": (
             options: [ "Pat" ],
             traits: [
                 "TypeAscriptionOwner",
-				"AttrsOwner",
+                "AttrsOwner",
             ]
         ),
         "UseItem": (

@@ -26,70 +26,42 @@ macro_rules! impl_froms {
     }
 }
 
-mod either;
 pub mod debug;
 
 pub mod db;
-#[macro_use]
-pub mod mock;
-mod path;
 pub mod source_binder;
 
-mod source_id;
-mod ids;
-mod name;
-mod nameres;
-mod adt;
-mod traits;
-mod type_alias;
-mod type_ref;
 mod ty;
-mod attr;
-mod impl_block;
-mod expr;
-mod lang_item;
-mod generics;
-mod resolve;
 pub mod diagnostics;
 
+mod from_id;
 mod code_model;
 
 pub mod from_source;
 
-#[cfg(test)]
-mod marks;
-
-use crate::{
-    ids::MacroFileKind,
-    name::AsName,
-    resolve::Resolver,
-    source_id::{AstId, FileAstId},
+pub use crate::{
+    code_model::{
+        src::HasSource, Adt, AssocItem, AttrDef, Const, Container, Crate, CrateDependency,
+        DefWithBody, Docs, Enum, EnumVariant, FieldSource, Function, GenericDef, GenericParam,
+        HasAttrs, ImplBlock, Import, Local, MacroDef, Module, ModuleDef, ModuleSource, ScopeDef,
+        Static, Struct, StructField, Trait, Type, TypeAlias, Union, VariantDef,
+    },
+    from_source::FromSource,
+    source_binder::{PathResolution, ScopeEntryWithSyntax, SourceAnalyzer},
+    ty::{
+        display::HirDisplay,
+        primitive::{FloatBitness, FloatTy, IntBitness, IntTy, Signedness, Uncertain},
+        ApplicationTy, CallableDef, Substs, TraitRef, Ty, TypeCtor, TypeWalk,
+    },
 };
 
-pub use self::{
-    adt::VariantDef,
-    either::Either,
-    expr::ExprScopes,
-    from_source::FromSource,
-    generics::{GenericDef, GenericParam, GenericParams, HasGenericParams},
-    ids::{HirFileId, MacroCallId, MacroCallLoc, MacroDefId, MacroFile},
-    impl_block::ImplBlock,
-    name::Name,
-    nameres::{ImportId, Namespace, PerNs},
+pub use hir_def::{
+    body::scope::ExprScopes,
+    builtin_type::BuiltinType,
+    docs::Documentation,
     path::{Path, PathKind},
-    resolve::ScopeDef,
-    source_binder::{PathResolution, ScopeEntryWithSyntax, SourceAnalyzer},
-    source_id::{AstIdMap, ErasedFileAstId},
-    ty::{
-        display::HirDisplay, ApplicationTy, CallableDef, Substs, TraitRef, Ty, TypeCtor, TypeWalk,
-    },
     type_ref::Mutability,
 };
-
-pub use self::code_model::{
-    docs::{DocDef, Docs, Documentation},
-    src::{HasBodySource, HasSource, Source},
-    Adt, AssocItem, BuiltinType, Const, ConstData, Container, Crate, CrateDependency, DefWithBody,
-    Enum, EnumVariant, FieldSource, FnData, Function, HasBody, MacroDef, Module, ModuleDef,
-    ModuleSource, Static, Struct, StructField, Trait, TypeAlias, Union,
+pub use hir_expand::{
+    name::Name, HirFileId, InFile, MacroCallId, MacroCallLoc, MacroDefId, MacroFile,
 };

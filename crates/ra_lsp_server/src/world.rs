@@ -9,7 +9,7 @@ use crossbeam_channel::{unbounded, Receiver};
 use lsp_server::ErrorCode;
 use lsp_types::Url;
 use parking_lot::RwLock;
-use ra_ide_api::{
+use ra_ide::{
     Analysis, AnalysisChange, AnalysisHost, CrateGraph, FeatureFlags, FileId, LibraryData,
     SourceRootId,
 };
@@ -27,6 +27,8 @@ use crate::{
 pub struct Options {
     pub publish_decorations: bool,
     pub supports_location_link: bool,
+    pub line_folding_only: bool,
+    pub max_inlay_hint_length: Option<usize>,
 }
 
 /// `WorldState` is the primary mutable state of the language server

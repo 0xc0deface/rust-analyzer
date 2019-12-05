@@ -2,7 +2,7 @@
 //! Extensions for various expressions live in a sibling `expr_extensions` module.
 
 use crate::{
-    ast::{self, child_opt, children, AstChildren, AstNode, AttrInput, SyntaxNode},
+    ast::{self, child_opt, children, AstNode, AttrInput, SyntaxNode},
     SmolStr, SyntaxElement,
     SyntaxKind::*,
     SyntaxToken, T,
@@ -32,7 +32,7 @@ impl ast::NameRef {
 }
 
 fn text_of_first_token(node: &SyntaxNode) -> &SmolStr {
-    node.green().children().first().and_then(|it| it.as_token()).unwrap().text()
+    node.green().children().next().and_then(|it| it.into_token()).unwrap().text()
 }
 
 impl ast::Attr {
@@ -176,27 +176,17 @@ impl ast::ImplBlock {
     }
 }
 
-impl ast::AttrsOwner for ast::ImplItem {
-    fn attrs(&self) -> AstChildren<ast::Attr> {
-        match self {
-            ast::ImplItem::FnDef(it) => it.attrs(),
-            ast::ImplItem::TypeAliasDef(it) => it.attrs(),
-            ast::ImplItem::ConstDef(it) => it.attrs(),
-        }
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StructKind {
+    Record(ast::RecordFieldDefList),
     Tuple(ast::TupleFieldDefList),
-    Named(ast::RecordFieldDefList),
     Unit,
 }
 
 impl StructKind {
     fn from_node<N: AstNode>(node: &N) -> StructKind {
         if let Some(nfdl) = child_opt::<_, ast::RecordFieldDefList>(node) {
-            StructKind::Named(nfdl)
+            StructKind::Record(nfdl)
         } else if let Some(pfl) = child_opt::<_, ast::TupleFieldDefList>(node) {
             StructKind::Tuple(pfl)
         } else {
@@ -206,17 +196,6 @@ impl StructKind {
 }
 
 impl ast::StructDef {
-    pub fn is_union(&self) -> bool {
-        for child in self.syntax().children_with_tokens() {
-            match child.kind() {
-                T![struct] => return false,
-                T![union] => return true,
-                _ => (),
-            }
-        }
-        false
-    }
-
     pub fn kind(&self) -> StructKind {
         StructKind::from_node(self)
     }

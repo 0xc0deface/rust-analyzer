@@ -1,14 +1,19 @@
 The main interface to rust-analyzer is the
 [LSP](https://microsoft.github.io/language-server-protocol/) implementation. To
-install lsp server, use `cargo install-ra --server`, which is a shorthand for `cargo
-install --package ra_lsp_server`. The binary is named `ra_lsp_server`, you
-should be able to use it with any LSP-compatible editor. We use custom
+install lsp server, clone the repository and then run `cargo xtask install
+--server` (which is shorthand for `cargo install --path
+./crates/ra_lsp_server`). This will produce a binary named `ra_lsp_server` which
+you should be able to use it with any LSP-compatible editor. We use custom
 extensions to LSP, so special client-side support is required to take full
 advantage of rust-analyzer. This repository contains support code for VS Code
 and Emacs.
 
-Rust Analyzer needs sources of rust standard library to work, so you might need
-to execute
+```
+$ git clone git@github.com:rust-analyzer/rust-analyzer && cd rust-analyzer
+$ cargo xtask install --server
+```
+Rust Analyzer needs sources of rust standard library to work, so
+you might also need to execute
 
 ```
 $ rustup component add rust-src
@@ -33,7 +38,7 @@ following commands:
 ```
 $ git clone https://github.com/rust-analyzer/rust-analyzer.git --depth 1
 $ cd rust-analyzer
-$ cargo install-ra
+$ cargo xtask install
 ```
 
 The automatic installation is expected to *just work* for common cases, if it
@@ -58,14 +63,31 @@ Beyond basic LSP features, there are some extension commands which you can
 invoke via <kbd>Ctrl+Shift+P</kbd> or bind to a shortcut. See [./features.md](./features.md)
 for details.
 
-For updates, pull the latest changes from the master branch, run `cargo install-ra` again, and **restart** VS Code instance.
+For updates, pull the latest changes from the master branch, run `cargo xtask install` again, and **restart** VS Code instance.
 See [microsoft/vscode#72308](https://github.com/microsoft/vscode/issues/72308) for why a full restart is needed.
+
+### VS Code Remote
+
+You can also use `rust-analyzer` with the Visual Studio Code Remote extensions
+(Remote SSH, Remote WSL, Remote Containers). In this case, however, you have to
+manually install the `.vsix` package:
+
+1. Build the extension on the remote host using the instructions above (ignore the
+   error if `code` cannot be found in your PATH: VSCode doesn't need to be installed
+   on the remote host).
+2. In Visual Studio Code open a connection to the remote host.
+3. Open the Extensions View (`View > Extensions`, keyboard shortcut: `Ctrl+Shift+X`).
+4. From the top-right kebab menu (`···`) select `Install from VSIX...`
+5. Inside the `rust-analyzer` directory find the `editors/code` subdirectory and choose
+   the `ra-lsp-0.0.1.vsix` file.
+6. Restart Visual Studio Code and re-establish the connection to the remote host.
+
+In case of errors please make sure that `~/.cargo/bin` is in your `PATH` on the remote
+host.
 
 ### Settings
 
 * `rust-analyzer.highlightingOn`: enables experimental syntax highlighting
-* `rust-analyzer.showWorkspaceLoadedNotification`: to ease troubleshooting, a
-  notification is shown by default when a workspace is loaded
 * `rust-analyzer.enableEnhancedTyping`: by default, rust-analyzer intercepts
   `Enter` key to make it easier to continue comments. Note that it may conflict with VIM emulation plugin.
 * `rust-analyzer.raLspServerPath`: path to `ra_lsp_server` executable
@@ -79,9 +101,23 @@ See [microsoft/vscode#72308](https://github.com/microsoft/vscode/issues/72308) f
 * `rust-analyzer.cargo-watch.command`: `cargo-watch` command. (e.g: `clippy` will run as `cargo watch -x clippy` )
 * `rust-analyzer.cargo-watch.arguments`: cargo-watch check arguments.
   (e.g: `--features="shumway,pdf"` will run as `cargo watch -x "check --features="shumway,pdf""` )
+* `rust-analyzer.cargo-watch.ignore`: list of patterns for cargo-watch to ignore (will be passed as `--ignore`)
 * `rust-analyzer.trace.server`: enables internal logging
 * `rust-analyzer.trace.cargo-watch`: enables cargo-watch logging
 * `RUST_SRC_PATH`: environment variable that overwrites the sysroot
+* `rust-analyzer.featureFlags` -- a JSON object to tweak fine-grained behavior:
+   ```js
+   {
+       // Show diagnostics produced by rust-analyzer itself.
+       "lsp.diagnostics": true,
+       // Automatically insert `()` and `<>` when completing functions and types.
+       "completion.insertion.add-call-parenthesis": true,
+       // Enable completions like `.if`, `.match`, etc.
+       "completion.enable-postfix": true,
+       // Show notification when workspace is fully loaded
+       "notifications.workspace-loaded": true,
+   }
+   ```
 
 
 ## Emacs
@@ -93,13 +129,18 @@ Prerequisites:
 Installation:
 
 * add
-[ra-emacs-lsp.el](https://github.com/rust-analyzer/rust-analyzer/blob/69ee5c9c5ef212f7911028c9ddf581559e6565c3/editors/emacs/ra-emacs-lsp.el)
+[ra-emacs-lsp.el](../../editors/emacs/ra-emacs-lsp.el)
 to load path and require it in `init.el`
 * run `lsp` in a rust buffer
-* (Optionally) bind commands like `rust-analyzer-join-lines` or `rust-analyzer-extend-selection` to keys, and enable `rust-analyzer-inlay-hints-mode` to get inline type hints
+* (Optionally) bind commands like `rust-analyzer-join-lines`, `rust-analyzer-extend-selection` and `rust-analyzer-expand-macro` to keys, and enable `rust-analyzer-inlay-hints-mode` to get inline type hints
 
 
 ## Vim and NeoVim
+
+Neovim 0.5 has a built in language server. For a quick start configuration of
+rust-analyzer, use [neovim/nvim-lsp](https://github.com/neovim/nvim-lsp#rust_analyzer).
+Once `neovim/nvim-lsp` is installed, you can use `call nvim_lsp#setup("rust_analyzer", {})`
+or `lua require'nvim_lsp'.rust_analyzer.setup({})` to quickly get set up.
 
 * Install coc.nvim by following the instructions at [coc.nvim]
   - You will need nodejs installed.
@@ -153,7 +194,11 @@ Installation:
     "syntaxes": [
         "Packages/Rust/Rust.sublime-syntax",
         "Packages/Rust Enhanced/RustEnhanced.sublime-syntax"
-    ]
+    ],
+    "initializationOptions": {
+      "featureFlags": {
+      }
+    },
 }
 ```
 

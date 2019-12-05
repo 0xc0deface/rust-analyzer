@@ -1,150 +1,131 @@
 //! FIXME: write short doc here
 
-use ra_syntax::{
-    ast::{self, AstNode},
-    SyntaxNode,
+use either::Either;
+use hir_def::{
+    src::{HasChildSource, HasSource as _},
+    AstItemDef, Lookup, VariantId,
 };
+use ra_syntax::ast;
 
 use crate::{
-    db::{AstDatabase, DefDatabase, HirDatabase},
-    ids::AstItemDef,
-    Const, Either, Enum, EnumVariant, FieldSource, Function, HasBody, HirFileId, MacroDef, Module,
-    ModuleSource, Static, Struct, StructField, Trait, TypeAlias, Union,
+    db::DefDatabase, Const, Enum, EnumVariant, FieldSource, Function, ImplBlock, Import, MacroDef,
+    Module, ModuleSource, Static, Struct, StructField, Trait, TypeAlias, Union,
 };
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub struct Source<T> {
-    pub file_id: HirFileId,
-    pub ast: T,
-}
+pub use hir_expand::InFile;
 
 pub trait HasSource {
     type Ast;
-    fn source(self, db: &(impl DefDatabase + AstDatabase)) -> Source<Self::Ast>;
-}
-
-impl<T> Source<T> {
-    pub(crate) fn map<F: FnOnce(T) -> U, U>(self, f: F) -> Source<U> {
-        Source { file_id: self.file_id, ast: f(self.ast) }
-    }
-    pub(crate) fn file_syntax(&self, db: &impl AstDatabase) -> SyntaxNode {
-        db.parse_or_expand(self.file_id).expect("source created from invalid file")
-    }
+    fn source(self, db: &impl DefDatabase) -> InFile<Self::Ast>;
 }
 
 /// NB: Module is !HasSource, because it has two source nodes at the same time:
 /// definition and declaration.
 impl Module {
     /// Returns a node which defines this module. That is, a file or a `mod foo {}` with items.
-    pub fn definition_source(self, db: &(impl DefDatabase + AstDatabase)) -> Source<ModuleSource> {
-        let def_map = db.crate_def_map(self.krate);
-        let decl_id = def_map[self.module_id].declaration;
-        let file_id = def_map[self.module_id].definition;
-        let ast = ModuleSource::new(db, file_id, decl_id);
-        let file_id = file_id.map(HirFileId::from).unwrap_or_else(|| decl_id.unwrap().file_id());
-        Source { file_id, ast }
+    pub fn definition_source(self, db: &impl DefDatabase) -> InFile<ModuleSource> {
+        let def_map = db.crate_def_map(self.id.krate);
+        let src = def_map[self.id.local_id].definition_source(db);
+        src.map(|it| match it {
+            Either::Left(it) => ModuleSource::SourceFile(it),
+            Either::Right(it) => ModuleSource::Module(it),
+        })
     }
 
     /// Returns a node which declares this module, either a `mod foo;` or a `mod foo {}`.
     /// `None` for the crate root.
-    pub fn declaration_source(
-        self,
-        db: &(impl DefDatabase + AstDatabase),
-    ) -> Option<Source<ast::Module>> {
-        let def_map = db.crate_def_map(self.krate);
-        let decl = def_map[self.module_id].declaration?;
-        let ast = decl.to_node(db);
-        Some(Source { file_id: decl.file_id(), ast })
+    pub fn declaration_source(self, db: &impl DefDatabase) -> Option<InFile<ast::Module>> {
+        let def_map = db.crate_def_map(self.id.krate);
+        def_map[self.id.local_id].declaration_source(db)
     }
 }
 
 impl HasSource for StructField {
     type Ast = FieldSource;
-    fn source(self, db: &(impl DefDatabase + AstDatabase)) -> Source<FieldSource> {
-        self.source_impl(db)
+    fn source(self, db: &impl DefDatabase) -> InFile<FieldSource> {
+        let var = VariantId::from(self.parent);
+        let src = var.child_source(db);
+        src.map(|it| match it[self.id].clone() {
+            Either::Left(it) => FieldSource::Pos(it),
+            Either::Right(it) => FieldSource::Named(it),
+        })
     }
 }
 impl HasSource for Struct {
     type Ast = ast::StructDef;
-    fn source(self, db: &(impl DefDatabase + AstDatabase)) -> Source<ast::StructDef> {
+    fn source(self, db: &impl DefDatabase) -> InFile<ast::StructDef> {
         self.id.source(db)
     }
 }
 impl HasSource for Union {
-    type Ast = ast::StructDef;
-    fn source(self, db: &(impl DefDatabase + AstDatabase)) -> Source<ast::StructDef> {
+    type Ast = ast::UnionDef;
+    fn source(self, db: &impl DefDatabase) -> InFile<ast::UnionDef> {
         self.id.source(db)
     }
 }
 impl HasSource for Enum {
     type Ast = ast::EnumDef;
-    fn source(self, db: &(impl DefDatabase + AstDatabase)) -> Source<ast::EnumDef> {
+    fn source(self, db: &impl DefDatabase) -> InFile<ast::EnumDef> {
         self.id.source(db)
     }
 }
 impl HasSource for EnumVariant {
     type Ast = ast::EnumVariant;
-    fn source(self, db: &(impl DefDatabase + AstDatabase)) -> Source<ast::EnumVariant> {
-        self.source_impl(db)
+    fn source(self, db: &impl DefDatabase) -> InFile<ast::EnumVariant> {
+        self.parent.id.child_source(db).map(|map| map[self.id].clone())
     }
 }
 impl HasSource for Function {
     type Ast = ast::FnDef;
-    fn source(self, db: &(impl DefDatabase + AstDatabase)) -> Source<ast::FnDef> {
-        self.id.source(db)
+    fn source(self, db: &impl DefDatabase) -> InFile<ast::FnDef> {
+        self.id.lookup(db).source(db)
     }
 }
 impl HasSource for Const {
     type Ast = ast::ConstDef;
-    fn source(self, db: &(impl DefDatabase + AstDatabase)) -> Source<ast::ConstDef> {
-        self.id.source(db)
+    fn source(self, db: &impl DefDatabase) -> InFile<ast::ConstDef> {
+        self.id.lookup(db).source(db)
     }
 }
 impl HasSource for Static {
     type Ast = ast::StaticDef;
-    fn source(self, db: &(impl DefDatabase + AstDatabase)) -> Source<ast::StaticDef> {
-        self.id.source(db)
+    fn source(self, db: &impl DefDatabase) -> InFile<ast::StaticDef> {
+        self.id.lookup(db).source(db)
     }
 }
 impl HasSource for Trait {
     type Ast = ast::TraitDef;
-    fn source(self, db: &(impl DefDatabase + AstDatabase)) -> Source<ast::TraitDef> {
+    fn source(self, db: &impl DefDatabase) -> InFile<ast::TraitDef> {
         self.id.source(db)
     }
 }
 impl HasSource for TypeAlias {
     type Ast = ast::TypeAliasDef;
-    fn source(self, db: &(impl DefDatabase + AstDatabase)) -> Source<ast::TypeAliasDef> {
-        self.id.source(db)
+    fn source(self, db: &impl DefDatabase) -> InFile<ast::TypeAliasDef> {
+        self.id.lookup(db).source(db)
     }
 }
 impl HasSource for MacroDef {
     type Ast = ast::MacroCall;
-    fn source(self, db: &(impl DefDatabase + AstDatabase)) -> Source<ast::MacroCall> {
-        Source { file_id: self.id.ast_id.file_id(), ast: self.id.ast_id.to_node(db) }
+    fn source(self, db: &impl DefDatabase) -> InFile<ast::MacroCall> {
+        InFile { file_id: self.id.ast_id.file_id, value: self.id.ast_id.to_node(db) }
     }
 }
-
-pub trait HasBodySource: HasBody + HasSource
-where
-    Self::Ast: AstNode,
-{
-    fn expr_source(
-        self,
-        db: &impl HirDatabase,
-        expr_id: crate::expr::ExprId,
-    ) -> Option<Source<Either<ast::Expr, ast::RecordField>>> {
-        let source_map = self.body_source_map(db);
-        let source_ptr = source_map.expr_syntax(expr_id)?;
-        let root = source_ptr.file_syntax(db);
-        let source = source_ptr.map(|ast| ast.map(|it| it.to_node(&root), |it| it.to_node(&root)));
-        Some(source)
+impl HasSource for ImplBlock {
+    type Ast = ast::ImplBlock;
+    fn source(self, db: &impl DefDatabase) -> InFile<ast::ImplBlock> {
+        self.id.source(db)
     }
 }
+impl HasSource for Import {
+    type Ast = Either<ast::UseTree, ast::ExternCrateItem>;
 
-impl<T> HasBodySource for T
-where
-    T: HasBody + HasSource,
-    T::Ast: AstNode,
-{
+    /// Returns the syntax of the last path segment corresponding to this import
+    fn source(self, db: &impl DefDatabase) -> InFile<Self::Ast> {
+        let src = self.parent.definition_source(db);
+        let (_, source_map) = db.raw_items_with_source_map(src.file_id);
+        let root = db.parse_or_expand(src.file_id).unwrap();
+        let ptr = source_map.get(self.id);
+        src.with_value(ptr.map_left(|it| it.to_node(&root)).map_right(|it| it.to_node(&root)))
+    }
 }

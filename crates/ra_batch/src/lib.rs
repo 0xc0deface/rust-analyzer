@@ -6,7 +6,7 @@ use rustc_hash::FxHashMap;
 
 use crossbeam_channel::{unbounded, Receiver};
 use ra_db::{CrateGraph, FileId, SourceRootId};
-use ra_ide_api::{AnalysisChange, AnalysisHost, FeatureFlags};
+use ra_ide::{AnalysisChange, AnalysisHost, FeatureFlags};
 use ra_project_model::{get_rustc_cfg_options, PackageRoot, ProjectWorkspace};
 use ra_vfs::{RootEntry, Vfs, VfsChange, VfsTask, Watch};
 use ra_vfs_glob::RustPackageFilterBuilder;
@@ -117,9 +117,12 @@ pub fn load(
                         done = true;
                     }
                 }
-                VfsChange::AddFile { .. }
-                | VfsChange::RemoveFile { .. }
-                | VfsChange::ChangeFile { .. } => {
+                VfsChange::AddFile { root, file, path, text } => {
+                    let source_root_id = vfs_root_to_id(root);
+                    let file_id = vfs_file_to_id(file);
+                    analysis_change.add_file(source_root_id, file_id, path, text);
+                }
+                VfsChange::RemoveFile { .. } | VfsChange::ChangeFile { .. } => {
                     // We just need the first scan, so just ignore these
                 }
             }
@@ -141,14 +144,8 @@ mod tests {
     #[test]
     fn test_loading_rust_analyzer() {
         let path = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap().parent().unwrap();
-        let (host, roots) = load_cargo(path).unwrap();
-        let mut n_crates = 0;
-        for (root, _) in roots {
-            for _krate in Crate::source_root_crates(host.raw_database(), root) {
-                n_crates += 1;
-            }
-        }
-
+        let (host, _roots) = load_cargo(path).unwrap();
+        let n_crates = Crate::all(host.raw_database()).len();
         // RA has quite a few crates, but the exact count doesn't matter
         assert!(n_crates > 20);
     }

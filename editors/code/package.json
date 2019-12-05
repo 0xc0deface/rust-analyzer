@@ -91,6 +91,11 @@
                 "category": "Rust Analyzer"
             },
             {
+                "command": "rust-analyzer.expandMacro",
+                "title": "Expand macro recursively",
+                "category": "Rust Analyzer"
+            },
+            {
                 "command": "rust-analyzer.matchingBrace",
                 "title": "Find matching brace",
                 "category": "Rust Analyzer"
@@ -224,6 +229,11 @@
                     "description": "`cargo-watch` command. (e.g: `clippy` will run as `cargo watch -x clippy` )",
                     "default": "check"
                 },
+                "rust-analyzer.cargo-watch.ignore": {
+                    "type": "array",
+                    "description": "A list of patterns for cargo-watch to ignore (will be passed as `--ignore`)",
+                    "default": []
+                },
                 "rust-analyzer.trace.server": {
                     "type": "string",
                     "scope": "window",
@@ -260,6 +270,11 @@
                     "type": "boolean",
                     "default": true,
                     "description": "Display additional type information in the editor"
+                },
+                "rust-analyzer.maxInlayHintLength": {
+                    "type": "number",
+                    "default": 20,
+                    "description": "Maximum length for inlay hints"
                 }
             }
         },

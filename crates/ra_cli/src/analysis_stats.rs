@@ -2,17 +2,18 @@
 
 use std::{collections::HashSet, fmt::Write, path::Path, time::Instant};
 
-use ra_db::SourceDatabase;
-use ra_hir::{AssocItem, Crate, HasBodySource, HasSource, HirDisplay, ModuleDef, Ty, TypeWalk};
+use ra_db::SourceDatabaseExt;
+use ra_hir::{AssocItem, Crate, HasSource, HirDisplay, ModuleDef, Ty, TypeWalk};
 use ra_syntax::AstNode;
 
-use crate::{Result, Verbosity};
+use crate::{progress_report::ProgressReport, Result, Verbosity};
 
 pub fn run(
     verbosity: Verbosity,
     memory_usage: bool,
     path: &Path,
     only: Option<&str>,
+    with_deps: bool,
 ) -> Result<()> {
     let db_load_time = Instant::now();
     let (mut host, roots) = ra_batch::load_cargo(path)?;
@@ -22,16 +23,28 @@ pub fn run(
     let mut num_crates = 0;
     let mut visited_modules = HashSet::new();
     let mut visit_queue = Vec::new();
-    for (source_root_id, project_root) in roots {
-        if project_root.is_member() {
-            for krate in Crate::source_root_crates(db, source_root_id) {
-                num_crates += 1;
-                let module =
-                    krate.root_module(db).expect("crate in source root without root module");
-                visit_queue.push(module);
-            }
+
+    let members =
+        roots
+            .into_iter()
+            .filter_map(|(source_root_id, project_root)| {
+                if with_deps || project_root.is_member() {
+                    Some(source_root_id)
+                } else {
+                    None
+                }
+            })
+            .collect::<HashSet<_>>();
+
+    for krate in Crate::all(db) {
+        let module = krate.root_module(db).expect("crate without root module");
+        let file_id = module.definition_source(db).file_id;
+        if members.contains(&db.file_source_root(file_id.original_file(db))) {
+            num_crates += 1;
+            visit_queue.push(module);
         }
     }
+
     println!("Crates in this dir: {}", num_crates);
     let mut num_decls = 0;
     let mut funcs = Vec::new();
@@ -62,17 +75,11 @@ pub fn run(
     println!("Item Collection: {:?}, {}", analysis_time.elapsed(), ra_prof::memory_usage());
 
     let inference_time = Instant::now();
-    let bar = match verbosity {
-        Verbosity::Verbose | Verbosity::Normal => indicatif::ProgressBar::with_draw_target(
-            funcs.len() as u64,
-            indicatif::ProgressDrawTarget::stderr_nohz(),
-        ),
-        Verbosity::Quiet => indicatif::ProgressBar::hidden(),
+    let mut bar = match verbosity {
+        Verbosity::Verbose | Verbosity::Normal => ProgressReport::new(funcs.len() as u64),
+        Verbosity::Quiet => ProgressReport::hidden(),
     };
 
-    bar.set_style(
-        indicatif::ProgressStyle::default_bar().template("{wide_bar} {pos}/{len}\n{msg}"),
-    );
     bar.tick();
     let mut num_exprs = 0;
     let mut num_exprs_unknown = 0;
@@ -85,7 +92,7 @@ pub fn run(
             let src = f.source(db);
             let original_file = src.file_id.original_file(db);
             let path = db.file_relative_path(original_file);
-            let syntax_range = src.ast.syntax().text_range();
+            let syntax_range = src.value.syntax().text_range();
             write!(msg, " ({:?} {})", path, syntax_range).unwrap();
         }
         bar.set_message(&msg);
@@ -96,7 +103,7 @@ pub fn run(
         }
         let body = f.body(db);
         let inference_result = f.infer(db);
-        for (expr_id, _) in body.exprs() {
+        for (expr_id, _) in body.exprs.iter() {
             let ty = &inference_result[expr_id];
             num_exprs += 1;
             if let Ty::Unknown = ty {
@@ -115,22 +122,23 @@ pub fn run(
             if let Some(mismatch) = inference_result.type_mismatch_for_expr(expr_id) {
                 num_type_mismatches += 1;
                 if verbosity.is_verbose() {
-                    let src = f.expr_source(db, expr_id);
+                    let src = f.body_source_map(db).expr_syntax(expr_id);
                     if let Some(src) = src {
                         // FIXME: it might be nice to have a function (on Analysis?) that goes from Source<T> -> (LineCol, LineCol) directly
                         let original_file = src.file_id.original_file(db);
                         let path = db.file_relative_path(original_file);
                         let line_index = host.analysis().file_line_index(original_file).unwrap();
-                        let text_range = src
-                            .ast
-                            .either(|it| it.syntax().text_range(), |it| it.syntax().text_range());
+                        let text_range = src.value.either(
+                            |it| it.syntax_node_ptr().range(),
+                            |it| it.syntax_node_ptr().range(),
+                        );
                         let (start, end) = (
                             line_index.line_col(text_range.start()),
                             line_index.line_col(text_range.end()),
                         );
                         bar.println(format!(
                             "{} {}:{}-{}:{}: Expected {}, got {}",
-                            path.display(),
+                            path,
                             start.line + 1,
                             start.col_utf16,
                             end.line + 1,
@@ -156,12 +164,12 @@ pub fn run(
     println!(
         "Expressions of unknown type: {} ({}%)",
         num_exprs_unknown,
-        (num_exprs_unknown * 100 / num_exprs)
+        if num_exprs > 0 { (num_exprs_unknown * 100 / num_exprs) } else { 100 }
     );
     println!(
         "Expressions of partially unknown type: {} ({}%)",
         num_exprs_partially_unknown,
-        (num_exprs_partially_unknown * 100 / num_exprs)
+        if num_exprs > 0 { (num_exprs_partially_unknown * 100 / num_exprs) } else { 100 }
     );
     println!("Type mismatches: {}", num_type_mismatches);
     println!("Inference: {:?}, {}", inference_time.elapsed(), ra_prof::memory_usage());

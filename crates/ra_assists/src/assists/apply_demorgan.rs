@@ -1,20 +1,30 @@
-//! This contains the functions associated with the demorgan assist.
-//! This assist transforms boolean expressions of the form `!a || !b` into
-//! `!(a && b)`.
+use super::invert_if::invert_boolean_expression;
 use hir::db::HirDatabase;
 use ra_syntax::ast::{self, AstNode};
-use ra_syntax::SyntaxNode;
 
 use crate::{Assist, AssistCtx, AssistId};
 
-/// Assist for applying demorgan's law
-///
-/// This transforms expressions of the form `!l || !r` into `!(l && r)`.
-/// This also works with `&&`. This assist can only be applied with the cursor
-/// on either `||` or `&&`, with both operands being a negation of some kind.
-/// This means something of the form `!x` or `x != y`.
-pub(crate) fn apply_demorgan(mut ctx: AssistCtx<impl HirDatabase>) -> Option<Assist> {
-    let expr = ctx.node_at_offset::<ast::BinExpr>()?;
+// Assist: apply_demorgan
+//
+// Apply [De Morgan's law](https://en.wikipedia.org/wiki/De_Morgan%27s_laws).
+// This transforms expressions of the form `!l || !r` into `!(l && r)`.
+// This also works with `&&`. This assist can only be applied with the cursor
+// on either `||` or `&&`, with both operands being a negation of some kind.
+// This means something of the form `!x` or `x != y`.
+//
+// ```
+// fn main() {
+//     if x != 4 ||<|> !y {}
+// }
+// ```
+// ->
+// ```
+// fn main() {
+//     if !(x == 4 && y) {}
+// }
+// ```
+pub(crate) fn apply_demorgan(ctx: AssistCtx<impl HirDatabase>) -> Option<Assist> {
+    let expr = ctx.find_node_at_offset::<ast::BinExpr>()?;
     let op = expr.op_kind()?;
     let op_range = expr.op_token()?.text_range();
     let opposite_op = opposite_logic_op(op)?;
@@ -22,20 +32,19 @@ pub(crate) fn apply_demorgan(mut ctx: AssistCtx<impl HirDatabase>) -> Option<Ass
     if !cursor_in_range {
         return None;
     }
-    let lhs = expr.lhs()?.syntax().clone();
-    let lhs_range = lhs.text_range();
-    let rhs = expr.rhs()?.syntax().clone();
-    let rhs_range = rhs.text_range();
-    let not_lhs = undo_negation(lhs)?;
-    let not_rhs = undo_negation(rhs)?;
+    let lhs = expr.lhs()?;
+    let lhs_range = lhs.syntax().text_range();
+    let rhs = expr.rhs()?;
+    let rhs_range = rhs.syntax().text_range();
+    let not_lhs = invert_boolean_expression(&lhs)?;
+    let not_rhs = invert_boolean_expression(&rhs)?;
 
-    ctx.add_action(AssistId("apply_demorgan"), "apply demorgan's law", |edit| {
+    ctx.add_assist(AssistId("apply_demorgan"), "apply demorgan's law", |edit| {
         edit.target(op_range);
         edit.replace(op_range, opposite_op);
-        edit.replace(lhs_range, format!("!({}", not_lhs));
-        edit.replace(rhs_range, format!("{})", not_rhs));
-    });
-    ctx.build()
+        edit.replace(lhs_range, format!("!({}", not_lhs.syntax().text()));
+        edit.replace(rhs_range, format!("{})", not_rhs.syntax().text()));
+    })
 }
 
 // Return the opposite text for a given logical operator, if it makes sense
@@ -43,28 +52,6 @@ fn opposite_logic_op(kind: ast::BinOp) -> Option<&'static str> {
     match kind {
         ast::BinOp::BooleanOr => Some("&&"),
         ast::BinOp::BooleanAnd => Some("||"),
-        _ => None,
-    }
-}
-
-// This function tries to undo unary negation, or inequality
-fn undo_negation(node: SyntaxNode) -> Option<String> {
-    match ast::Expr::cast(node)? {
-        ast::Expr::BinExpr(bin) => match bin.op_kind()? {
-            ast::BinOp::NegatedEqualityTest => {
-                let lhs = bin.lhs()?.syntax().text();
-                let rhs = bin.rhs()?.syntax().text();
-                Some(format!("{} == {}", lhs, rhs))
-            }
-            _ => None,
-        },
-        ast::Expr::PrefixExpr(pe) => match pe.op_kind()? {
-            ast::PrefixOp::Not => {
-                let child = pe.expr()?.syntax().text();
-                Some(String::from(child))
-            }
-            _ => None,
-        },
         _ => None,
     }
 }

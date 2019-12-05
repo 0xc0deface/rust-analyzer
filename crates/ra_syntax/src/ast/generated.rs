@@ -312,6 +312,7 @@ impl AstNode for Block {
     }
 }
 impl ast::AttrsOwner for Block {}
+impl ast::ModuleItemOwner for Block {}
 impl Block {
     pub fn statements(&self) -> AstChildren<Stmt> {
         AstChildren::new(&self.syntax)
@@ -1298,6 +1299,7 @@ impl AstNode for ImplItem {
         }
     }
 }
+impl ast::AttrsOwner for ImplItem {}
 impl ImplItem {}
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ImplTraitType {
@@ -1855,6 +1857,7 @@ impl Module {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ModuleItem {
     StructDef(StructDef),
+    UnionDef(UnionDef),
     EnumDef(EnumDef),
     FnDef(FnDef),
     TraitDef(TraitDef),
@@ -1869,6 +1872,11 @@ pub enum ModuleItem {
 impl From<StructDef> for ModuleItem {
     fn from(node: StructDef) -> ModuleItem {
         ModuleItem::StructDef(node)
+    }
+}
+impl From<UnionDef> for ModuleItem {
+    fn from(node: UnionDef) -> ModuleItem {
+        ModuleItem::UnionDef(node)
     }
 }
 impl From<EnumDef> for ModuleItem {
@@ -1924,14 +1932,15 @@ impl From<Module> for ModuleItem {
 impl AstNode for ModuleItem {
     fn can_cast(kind: SyntaxKind) -> bool {
         match kind {
-            STRUCT_DEF | ENUM_DEF | FN_DEF | TRAIT_DEF | TYPE_ALIAS_DEF | IMPL_BLOCK | USE_ITEM
-            | EXTERN_CRATE_ITEM | CONST_DEF | STATIC_DEF | MODULE => true,
+            STRUCT_DEF | UNION_DEF | ENUM_DEF | FN_DEF | TRAIT_DEF | TYPE_ALIAS_DEF
+            | IMPL_BLOCK | USE_ITEM | EXTERN_CRATE_ITEM | CONST_DEF | STATIC_DEF | MODULE => true,
             _ => false,
         }
     }
     fn cast(syntax: SyntaxNode) -> Option<Self> {
         let res = match syntax.kind() {
             STRUCT_DEF => ModuleItem::StructDef(StructDef { syntax }),
+            UNION_DEF => ModuleItem::UnionDef(UnionDef { syntax }),
             ENUM_DEF => ModuleItem::EnumDef(EnumDef { syntax }),
             FN_DEF => ModuleItem::FnDef(FnDef { syntax }),
             TRAIT_DEF => ModuleItem::TraitDef(TraitDef { syntax }),
@@ -1949,6 +1958,7 @@ impl AstNode for ModuleItem {
     fn syntax(&self) -> &SyntaxNode {
         match self {
             ModuleItem::StructDef(it) => &it.syntax,
+            ModuleItem::UnionDef(it) => &it.syntax,
             ModuleItem::EnumDef(it) => &it.syntax,
             ModuleItem::FnDef(it) => &it.syntax,
             ModuleItem::TraitDef(it) => &it.syntax,
@@ -2037,6 +2047,7 @@ impl NeverType {}
 pub enum NominalDef {
     StructDef(StructDef),
     EnumDef(EnumDef),
+    UnionDef(UnionDef),
 }
 impl From<StructDef> for NominalDef {
     fn from(node: StructDef) -> NominalDef {
@@ -2048,10 +2059,15 @@ impl From<EnumDef> for NominalDef {
         NominalDef::EnumDef(node)
     }
 }
+impl From<UnionDef> for NominalDef {
+    fn from(node: UnionDef) -> NominalDef {
+        NominalDef::UnionDef(node)
+    }
+}
 impl AstNode for NominalDef {
     fn can_cast(kind: SyntaxKind) -> bool {
         match kind {
-            STRUCT_DEF | ENUM_DEF => true,
+            STRUCT_DEF | ENUM_DEF | UNION_DEF => true,
             _ => false,
         }
     }
@@ -2059,6 +2075,7 @@ impl AstNode for NominalDef {
         let res = match syntax.kind() {
             STRUCT_DEF => NominalDef::StructDef(StructDef { syntax }),
             ENUM_DEF => NominalDef::EnumDef(EnumDef { syntax }),
+            UNION_DEF => NominalDef::UnionDef(UnionDef { syntax }),
             _ => return None,
         };
         Some(res)
@@ -2067,6 +2084,7 @@ impl AstNode for NominalDef {
         match self {
             NominalDef::StructDef(it) => &it.syntax,
             NominalDef::EnumDef(it) => &it.syntax,
+            NominalDef::UnionDef(it) => &it.syntax,
         }
     }
 }
@@ -3624,8 +3642,11 @@ impl AstNode for TypeParam {
 impl ast::NameOwner for TypeParam {}
 impl ast::AttrsOwner for TypeParam {}
 impl ast::TypeBoundsOwner for TypeParam {}
-impl ast::DefaultTypeParamOwner for TypeParam {}
-impl TypeParam {}
+impl TypeParam {
+    pub fn default_type(&self) -> Option<TypeRef> {
+        AstChildren::new(&self.syntax).next()
+    }
+}
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TypeParamList {
     pub(crate) syntax: SyntaxNode,
@@ -3784,6 +3805,38 @@ impl AstNode for TypeRef {
     }
 }
 impl TypeRef {}
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct UnionDef {
+    pub(crate) syntax: SyntaxNode,
+}
+impl AstNode for UnionDef {
+    fn can_cast(kind: SyntaxKind) -> bool {
+        match kind {
+            UNION_DEF => true,
+            _ => false,
+        }
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        if Self::can_cast(syntax.kind()) {
+            Some(Self { syntax })
+        } else {
+            None
+        }
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+impl ast::VisibilityOwner for UnionDef {}
+impl ast::NameOwner for UnionDef {}
+impl ast::TypeParamsOwner for UnionDef {}
+impl ast::AttrsOwner for UnionDef {}
+impl ast::DocCommentsOwner for UnionDef {}
+impl UnionDef {
+    pub fn record_field_def_list(&self) -> Option<RecordFieldDefList> {
+        AstChildren::new(&self.syntax).next()
+    }
+}
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct UseItem {
     pub(crate) syntax: SyntaxNode,

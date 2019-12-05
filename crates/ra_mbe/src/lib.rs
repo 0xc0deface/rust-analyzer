@@ -31,8 +31,7 @@ pub enum ExpandError {
 }
 
 pub use crate::syntax_bridge::{
-    ast_to_token_tree, syntax_node_to_token_tree, token_tree_to_expr, token_tree_to_items,
-    token_tree_to_macro_stmts, token_tree_to_pat, token_tree_to_ty,
+    ast_to_token_tree, syntax_node_to_token_tree, token_tree_to_syntax_node, TokenMap,
 };
 
 /// This struct contains AST for a single `macro_rules` definition. What might
@@ -41,13 +40,73 @@ pub use crate::syntax_bridge::{
 /// and `$()*` have special meaning (see `Var` and `Repeat` data structures)
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MacroRules {
-    pub(crate) rules: Vec<Rule>,
+    rules: Vec<Rule>,
+    /// Highest id of the token we have in TokenMap
+    shift: Shift,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct Rule {
-    pub(crate) lhs: tt::Subtree,
-    pub(crate) rhs: tt::Subtree,
+struct Rule {
+    lhs: tt::Subtree,
+    rhs: tt::Subtree,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct Shift(u32);
+
+impl Shift {
+    fn new(tt: &tt::Subtree) -> Shift {
+        // Note that TokenId is started from zero,
+        // We have to add 1 to prevent duplication.
+        let value = max_id(tt).map_or(0, |it| it + 1);
+        return Shift(value);
+
+        // Find the max token id inside a subtree
+        fn max_id(subtree: &tt::Subtree) -> Option<u32> {
+            subtree
+                .token_trees
+                .iter()
+                .filter_map(|tt| match tt {
+                    tt::TokenTree::Subtree(subtree) => max_id(subtree),
+                    tt::TokenTree::Leaf(tt::Leaf::Ident(ident))
+                        if ident.id != tt::TokenId::unspecified() =>
+                    {
+                        Some(ident.id.0)
+                    }
+                    _ => None,
+                })
+                .max()
+        }
+    }
+
+    /// Shift given TokenTree token id
+    fn shift_all(self, tt: &mut tt::Subtree) {
+        for t in tt.token_trees.iter_mut() {
+            match t {
+                tt::TokenTree::Leaf(leaf) => match leaf {
+                    tt::Leaf::Ident(ident) => ident.id = self.shift(ident.id),
+                    _ => (),
+                },
+                tt::TokenTree::Subtree(tt) => self.shift_all(tt),
+            }
+        }
+    }
+
+    fn shift(self, id: tt::TokenId) -> tt::TokenId {
+        if id == tt::TokenId::unspecified() {
+            return id;
+        }
+        tt::TokenId(id.0 + self.0)
+    }
+
+    fn unshift(self, id: tt::TokenId) -> Option<tt::TokenId> {
+        id.0.checked_sub(self.0).map(tt::TokenId)
+    }
+}
+
+pub enum Origin {
+    Def,
+    Call,
 }
 
 impl MacroRules {
@@ -72,10 +131,25 @@ impl MacroRules {
             validate(&rule.lhs)?;
         }
 
-        Ok(MacroRules { rules })
+        Ok(MacroRules { rules, shift: Shift::new(tt) })
     }
+
     pub fn expand(&self, tt: &tt::Subtree) -> Result<tt::Subtree, ExpandError> {
-        mbe_expander::expand(self, tt)
+        // apply shift
+        let mut tt = tt.clone();
+        self.shift.shift_all(&mut tt);
+        mbe_expander::expand(self, &tt)
+    }
+
+    pub fn map_id_down(&self, id: tt::TokenId) -> tt::TokenId {
+        self.shift.shift(id)
+    }
+
+    pub fn map_id_up(&self, id: tt::TokenId) -> (tt::TokenId, Origin) {
+        match self.shift.unshift(id) {
+            Some(id) => (id, Origin::Call),
+            None => (id, Origin::Def),
+        }
     }
 }
 

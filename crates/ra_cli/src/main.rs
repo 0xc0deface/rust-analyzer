@@ -3,12 +3,12 @@
 mod analysis_stats;
 mod analysis_bench;
 mod help;
+mod progress_report;
 
 use std::{error::Error, fmt::Write, io::Read};
 
-use flexi_logger::Logger;
 use pico_args::Arguments;
-use ra_ide_api::{file_structure, Analysis};
+use ra_ide::{file_structure, Analysis};
 use ra_prof::profile;
 use ra_syntax::{AstNode, SourceFile};
 
@@ -31,7 +31,7 @@ impl Verbosity {
 }
 
 fn main() -> Result<()> {
-    Logger::with_env_or_str("error").start()?;
+    env_logger::try_init()?;
 
     let subcommand = match std::env::args_os().nth(1) {
         None => {
@@ -96,6 +96,7 @@ fn main() -> Result<()> {
             };
             let memory_usage = matches.contains("--memory-usage");
             let only: Option<String> = matches.opt_value_from_str(["-o", "--only"])?;
+            let with_deps: bool = matches.contains("--with-deps");
             let path = {
                 let mut trailing = matches.free()?;
                 if trailing.len() != 1 {
@@ -109,6 +110,7 @@ fn main() -> Result<()> {
                 memory_usage,
                 path.as_ref(),
                 only.as_ref().map(String::as_ref),
+                with_deps,
             )?;
         }
         "analysis-bench" => {

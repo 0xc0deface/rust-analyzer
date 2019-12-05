@@ -12,6 +12,7 @@ export interface CargoWatchOptions {
     arguments: string;
     command: string;
     trace: CargoWatchTraceOptions;
+    ignore: string[];
 }
 
 export class Config {
@@ -19,9 +20,9 @@ export class Config {
     public rainbowHighlightingOn = false;
     public enableEnhancedTyping = true;
     public raLspServerPath = RA_LSP_DEBUG || 'ra_lsp_server';
-    public showWorkspaceLoadedNotification = true;
     public lruCapacity: null | number = null;
     public displayInlayHints = true;
+    public maxInlayHintLength: null | number = null;
     public excludeGlobs = [];
     public useClientWatching = false;
     public featureFlags = {};
@@ -29,7 +30,8 @@ export class Config {
         enableOnStartup: 'ask',
         trace: 'off',
         arguments: '',
-        command: ''
+        command: '',
+        ignore: []
     };
 
     private prevEnhancedTyping: null | boolean = null;
@@ -50,12 +52,6 @@ export class Config {
         if (config.has('rainbowHighlightingOn')) {
             this.rainbowHighlightingOn = config.get(
                 'rainbowHighlightingOn'
-            ) as boolean;
-        }
-
-        if (config.has('showWorkspaceLoadedNotification')) {
-            this.showWorkspaceLoadedNotification = config.get(
-                'showWorkspaceLoadedNotification'
             ) as boolean;
         }
 
@@ -124,12 +120,24 @@ export class Config {
             );
         }
 
+        if (config.has('cargo-watch.ignore')) {
+            this.cargoWatchOptions.ignore = config.get<string[]>(
+                'cargo-watch.ignore',
+                []
+            );
+        }
+
         if (config.has('lruCapacity')) {
             this.lruCapacity = config.get('lruCapacity') as number;
         }
 
         if (config.has('displayInlayHints')) {
             this.displayInlayHints = config.get('displayInlayHints') as boolean;
+        }
+        if (config.has('maxInlayHintLength')) {
+            this.maxInlayHintLength = config.get(
+                'maxInlayHintLength'
+            ) as number;
         }
         if (config.has('excludeGlobs')) {
             this.excludeGlobs = config.get('excludeGlobs') || [];
